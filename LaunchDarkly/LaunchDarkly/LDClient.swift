@@ -330,6 +330,21 @@ public class LDClient {
         _identify(context: context, sheddable: true, useCache: useCache, completion: completion)
     }
 
+    public func identify(context: LDContext) async -> IdentifyResult {
+        await withCheckedContinuation { continuation in
+            _identify(context: context, sheddable: true, useCache: .yes) { result in
+                continuation.resume(returning: result)
+            }
+        }
+    }
+    public func identify(context: LDContext, useCache: IdentifyCacheUsage) async -> IdentifyResult {
+        await withCheckedContinuation { continuation in
+            _identify(context: context, sheddable: true, useCache: useCache) { result in
+                continuation.resume(returning: result)
+            }
+        }
+    }
+
     // Temporary helper method to allow code sharing between the sheddable and unsheddable identify methods. In the next major release, we will remove the deprecated identify method and inline
     // this implementation in the other one.
     private func _identify(context: LDContext, sheddable: Bool, useCache: IdentifyCacheUsage, completion: @escaping (_ result: IdentifyResult) -> Void) {
@@ -866,14 +881,14 @@ public class LDClient {
                     internalCompletedQueue.async {
                         if startTime + startWaitSeconds > Date().timeIntervalSince1970 && !completed {
                             completed = true
-                            continuation.resume(with: .success(false)) // false for not timedOut
+                            continuation.resume(returning: false) // false for not timedOut
                         }
                     }
                 }
                 internalCompletedQueue.asyncAfter(deadline: .now() + startWaitSeconds) {
                     if !completed {
                         completed = true
-                        continuation.resume(with: .success(true)) // true for timedOut
+                        continuation.resume(returning: true) // true for timedOut
                     }
                 }
             }
