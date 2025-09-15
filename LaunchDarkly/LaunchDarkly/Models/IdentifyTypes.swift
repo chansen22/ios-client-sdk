@@ -3,7 +3,7 @@ import Foundation
 /**
  Denotes the result of an identify request made through the `LDClient.identify(context: completion:)` method.
  */
-public enum IdentifyResult {
+public enum IdentifyResult: Sendable {
     /**
      The identify request has completed successfully.
      */
