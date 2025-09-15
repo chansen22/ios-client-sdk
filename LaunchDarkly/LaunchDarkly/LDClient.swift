@@ -853,6 +853,33 @@ public class LDClient {
         start(serviceFactory: nil, config: config, context: context, startWaitSeconds: startWaitSeconds, completion: completion)
     }
 
+    public static func start(config: LDConfig, context: LDContext? = nil, startWaitSeconds: TimeInterval) async -> Bool {
+        await withCheckedContinuation { continuation in
+            var completed = false
+            let internalCompletedQueue: DispatchQueue = DispatchQueue(label: "TimeOutQueue")
+            if !config.startOnline {
+                start(serviceFactory: nil, config: config, context: context)
+                continuation.resume(with: .success(true)) // offline is considered a short circuited timed out case
+            } else {
+                let startTime = Date().timeIntervalSince1970
+                start(serviceFactory: nil, config: config, context: context) {
+                    internalCompletedQueue.async {
+                        if startTime + startWaitSeconds > Date().timeIntervalSince1970 && !completed {
+                            completed = true
+                            continuation.resume(with: .success(false)) // false for not timedOut
+                        }
+                    }
+                }
+                internalCompletedQueue.asyncAfter(deadline: .now() + startWaitSeconds) {
+                    if !completed {
+                        completed = true
+                        continuation.resume(with: .success(true)) // true for timedOut
+                    }
+                }
+            }
+        }
+    }
+
     static func start(serviceFactory: ClientServiceCreating?, config: LDConfig, context: LDContext? = nil, startWaitSeconds: TimeInterval, completion: ((_ timedOut: Bool) -> Void)? = nil) {
         var completed = false
         let internalCompletedQueue: DispatchQueue = DispatchQueue(label: "TimeOutQueue")
