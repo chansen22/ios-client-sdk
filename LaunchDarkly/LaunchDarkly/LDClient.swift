@@ -330,6 +330,21 @@ public class LDClient {
         _identify(context: context, sheddable: true, useCache: useCache, completion: completion)
     }
 
+    public func identify(context: LDContext) async -> IdentifyResult {
+        await withCheckedContinuation { continuation in
+            _identify(context: context, sheddable: true, useCache: .yes) { result in
+                continuation.resume(returning: result)
+            }
+        }
+    }
+    public func identify(context: LDContext, useCache: IdentifyCacheUsage) async -> IdentifyResult {
+        await withCheckedContinuation { continuation in
+            _identify(context: context, sheddable: true, useCache: useCache) { result in
+                continuation.resume(returning: result)
+            }
+        }
+    }
+
     // Temporary helper method to allow code sharing between the sheddable and unsheddable identify methods. In the next major release, we will remove the deprecated identify method and inline
     // this implementation in the other one.
     private func _identify(context: LDContext, sheddable: Bool, useCache: IdentifyCacheUsage, completion: @escaping (_ result: IdentifyResult) -> Void) {
@@ -851,6 +866,33 @@ public class LDClient {
         }
 
         start(serviceFactory: nil, config: config, context: context, startWaitSeconds: startWaitSeconds, completion: completion)
+    }
+
+    public static func start(config: LDConfig, context: LDContext? = nil, startWaitSeconds: TimeInterval) async -> Bool {
+        await withCheckedContinuation { continuation in
+            var completed = false
+            let internalCompletedQueue: DispatchQueue = DispatchQueue(label: "TimeOutQueue")
+            if !config.startOnline {
+                start(serviceFactory: nil, config: config, context: context)
+                continuation.resume(with: .success(true)) // offline is considered a short circuited timed out case
+            } else {
+                let startTime = Date().timeIntervalSince1970
+                start(serviceFactory: nil, config: config, context: context) {
+                    internalCompletedQueue.async {
+                        if startTime + startWaitSeconds > Date().timeIntervalSince1970 && !completed {
+                            completed = true
+                            continuation.resume(returning: false) // false for not timedOut
+                        }
+                    }
+                }
+                internalCompletedQueue.asyncAfter(deadline: .now() + startWaitSeconds) {
+                    if !completed {
+                        completed = true
+                        continuation.resume(returning: true) // true for timedOut
+                    }
+                }
+            }
+        }
     }
 
     static func start(serviceFactory: ClientServiceCreating?, config: LDConfig, context: LDContext? = nil, startWaitSeconds: TimeInterval, completion: ((_ timedOut: Bool) -> Void)? = nil) {
